@@ -4,4 +4,4 @@ This repository contains the Cloudformation File which deploys an API Gateway & 
 
 ## Overview
 
-Once the API Endpoint is called, the API in turn triggers a Lambda Function which transforms the string received in query parameter `string` and returns the transformed string. The transformation example: replace Google for Google©. 
+Once the API Endpoint is called, the API in turn triggers a Lambda Function which transforms the string received in query parameter `string` and returns the transformed string. An example of the transformation is: Google will be replaced for Google©. 
