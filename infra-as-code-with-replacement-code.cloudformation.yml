@@ -28,7 +28,7 @@ Resources:
         ZipFile: |
           import re
           ## CONSTANTS ##
-          APPEND_CHAR = '©'
+          APPEND_CHAR = '\u00a9'
           REPLACEMENT_LIST = [
               'Oracle',
               'Google',
