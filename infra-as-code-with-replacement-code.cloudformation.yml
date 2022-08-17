@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deploys an API which appends a copywrite char at end of Oracle, Google & Microsoft
+Resources:
+  IamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Description: IAM Policy for Lambda Function
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt IamRole.Arn
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      Code: 
+        ZipFile: |
+          import re
+          ## CONSTANTS ##
+          APPEND_CHAR = '©'
+          REPLACEMENT_LIST = [
+              'Oracle',
+              'Google',
+              'Microsoft',
+          ]
+          def lambda_handler(event, context):
+              query_parameters = event.get('queryStringParameters', {})
+              if query_parameters:
+                  input_string = query_parameters.get('string', '')
+                  # Iteraing over each word that needs to be appended with ©
+                  for replacement_word in REPLACEMENT_LIST:
+                      # Searching & extracing `replacement_word` in `input_string` if it exists
+                      match = re.search(replacement_word, input_string, re.IGNORECASE)
+                      if match:
+                          # `replacement_word` is found. Appending "©" in the `input_string` after the matched word.
+                          input_string = input_string.replace(match[0], f'{match[0]}{APPEND_CHAR}')
+              else:
+                  input_string = ""
+              # Returning the `input_string`
+              return {
+                  "statusCode": 200,
+                  "body": input_string
+              }
+
+  ApiGwRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: technical-assessment
+      EndpointConfiguration:
+        Types: [REGIONAL]
+  ApiGwProxyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGwRestApi.RootResourceId
+      PathPart: replace
+      RestApiId: !Ref ApiGwRestApi
+  ApiGwProxyMethod:
+    DependsOn:
+      - LambdaFunction
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref ApiGwProxyResource
+      RestApiId: !Ref ApiGwRestApi
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+  # PRD
+  ApiGwPrdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prd
+      Description: PRD Stage
+      RestApiId: !Ref ApiGwRestApi
+      DeploymentId: !Ref ApiGwPrdDeployment
+  ApiGwPrdDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGwProxyResource
+      - ApiGwProxyMethod
+    Properties:
+      RestApiId: !Ref ApiGwRestApi
+      Description: PRD Deploy
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGwRestApi}/*
